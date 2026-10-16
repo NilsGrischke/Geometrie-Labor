@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometrie-Labor: 3D-Formen</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            z-index: 10;
+            width: 300px;
+            border: 1px solid #444;
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            text-align: center;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+        .select-group {
+            margin-bottom: 15px;
+        }
+        .select-group select {
+            width: 100%;
+            padding: 8px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .slider-group {
+            margin-bottom: 15px;
+        }
+        .slider-group label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .slider-group input {
+            width: 100%;
+            cursor: pointer;
+        }
+        #status-box {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .status-rechteck { background-color: #d97706; color: white; }
+        .status-quader { background-color: #4b5563; color: white; }
+        .status-wuerfel { background-color: #2563eb; color: white; animation: pulse 2s infinite; }
+        .status-kreis { background-color: #059669; color: white; }
+        .status-zylinder { background-color: #7c3aed; color: white; }
+        .status-kugel { background-color: #db2777; color: white; }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+        }
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 8px 16px;
+            border-radius: 20px;
+            pointer-events: none;
+            font-size: 0.9rem;
+            border: 1px solid #333;
+            z-index: 10;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <h2>Geometrie-Labor</h2>
+        
+        <div class="select-group">
+            <label for="shape-select">Form auswählen:</label>
+            <select id="shape-select">
+                <option value="quader">Quader (Rechteck → Würfel)</option>
+                <option value="zylinder">Zylinder (Kreis → Zylinder)</option>
+                <option value="kugel">Kugel (3D-Radius)</option>
+            </select>
+        </div>
+
+        <!-- Regler für Quader -->
+        <div id="controls-quader">
+            <div class="slider-group">
+                <label>Breite (a): <span id="val-a">2.00</span></label>
+                <input type="range" id="length-a" min="0.0" max="3" step="0.1" value="2.0">
+            </div>
+            <div class="slider-group">
+                <label>Höhe (b): <span id="val-b">1.50</span></label>
+                <input type="range" id="length-b" min="0.0" max="3" step="0.1" value="1.5">
+            </div>
+            <div class="slider-group">
+                <label>Tiefe (c): <span id="val-c">0.05</span></label>
+                <input type="range" id="length-c" min="0.0" max="3" step="0.1" value="0.0">
+            </div>
+        </div>
+
+        <!-- Regler für Zylinder -->
+        <div id="controls-zylinder" style="display: none;">
+            <div class="slider-group">
+                <label>Radius (r): <span id="val-r-zyl">1.00</span></label>
+                <input type="range" id="radius-zyl" min="0.0" max="1.5" step="0.1" value="1.0">
+            </div>
+            <div class="slider-group">
+                <label>Höhe (h): <span id="val-h-zyl">0.05</span></label>
+                <input type="range" id="height-zyl" min="0.00" max="3" step="0.1" value="0.0">
+            </div>
+        </div>
+
+        <!-- Regler für Kugel -->
+        <div id="controls-kugel" style="display: none;">
+            <div class="slider-group">
+                <label>Radius (r): <span id="val-r-kug">1.00</span></label>
+                <input type="range" id="radius-kug" min="0.0" max="1.8" step="0.1" value="1.0">
+            </div>
+        </div>
+
+        <div id="status-box" class="status-rechteck">Aktuelle Form: Rechteck</div>
+    </div>
+
+    <div id="instructions">Maus im freien Bereich ziehen zum Rotieren</div>
+
+    <canvas id="renderCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('renderCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Größe anpassen
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // UI-Elemente
+        const shapeSelect = document.getElementById('shape-select');
+        const controlsQuader = document.getElementById('controls-quader');
+        const controlsZylinder = document.getElementById('controls-zylinder');
+        const controlsKugel = document.getElementById('controls-kugel');
+        const statusBox = document.getElementById('status-box');
+
+        // Rotations-Variablen
+        let rotX = -0.4;
+        let rotY = 0.6;
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        // Wechsel der Form-Menüs
+        shapeSelect.addEventListener('change', () => {
+            controlsQuader.style.display = 'none';
+            controlsZylinder.style.display = 'none';
+            controlsKugel.style.display = 'none';
+
+            if (shapeSelect.value === 'quader') controlsQuader.style.display = 'block';
+            if (shapeSelect.value === 'zylinder') controlsZylinder.style.display = 'block';
+            if (shapeSelect.value === 'kugel') controlsKugel.style.display = 'block';
+        });
+
+        // 3D-Rotations-Maussteuerung
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.closest('#ui-container')) return;
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
+            rotY += deltaMove.x * 0.01;
+            rotX += deltaMove.y * 0.01;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mouseup', () => isDragging = false);
+
+        // Touch-Unterstützung
+        window.addEventListener('touchstart', (e) => {
+            if (e.target.closest('#ui-container')) return;
+            isDragging = true;
+            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        });
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const deltaMove = { x: e.touches[0].clientX - previousMousePosition.x, y: e.touches[0].clientY - previousMousePosition.y };
+            rotY += deltaMove.x * 0.01;
+            rotX += deltaMove.y * 0.01;
+            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        });
+        window.addEventListener('touchend', () => isDragging = false);
+
+        // Hilfsfunktion: 3D-Punkt in 2D projizieren
+        function project(x, y, z) {
+            // Rotation um Y-Achse
+            let cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+            let x1 = x * cosY - z * sinY;
+            let z1 = x * sinY + z * cosY;
+
+            // Rotation um X-Achse
+            let cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+            let y2 = y * cosX - z1 * sinX;
+            let z2 = y * sinX + z1 * cosX;
+
+            // Einfache perspektivische Projektion
+            const distance = 500;
+            const scale = distance / (distance + z2);
+            return {
+                x: canvas.width / 2 + x1 * scale * 100,
+                y: canvas.height / 2 + y2 * scale * 100,
+                z: z2 // Für Tiefensortierung
+            };
+        }
+
+        // Haupt-Zeichenschleife (Render Loop)
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Automatische Drehung bei Inaktivität
+            if (!isDragging) {
+                rotY += 0.003;
+            }
+
+            const activeShape = shapeSelect.value;
+
+            if (activeShape === 'quader') {
+                renderQuader();
+            } else if (activeShape === 'zylinder') {
+                renderZylinder();
+            } else if (activeShape === 'kugel') {
+                renderKugel();
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+                       function renderQuader() {
+            const a = parseFloat(document.getElementById('length-a').value);
+            const b = parseFloat(document.getElementById('length-b').value);
+            const c = parseFloat(document.getElementById('length-c').value);
+
+            document.getElementById('val-a').innerText = a.toFixed(2);
+            document.getElementById('val-b').innerText = b.toFixed(2);
+            document.getElementById('val-c').innerText = c.toFixed(2);
+
+            const epsilon = 0.08;
+            const istFlach = (a <= epsilon || b <= epsilon || c <= epsilon);
+            const alleGleich = Math.abs(a - b) < epsilon && Math.abs(b - c) < epsilon && Math.abs(a - c) < epsilon;
+
+            let color = "rgba(100, 116, 139, 0.75)"; // Grau (Quader)
+            if (istFlach) {
+                statusBox.innerText = "Aktuelle Form: Rechteck (2D)";
+                statusBox.className = "status-rechteck";
+                color = "rgba(217, 119, 6, 0.75)"; // Orange
+            } else if (alleGleich) {
+                statusBox.innerText = "Aktuelle Form: Würfel (3D)";
+                statusBox.className = "status-wuerfel";
+                color = "rgba(37, 99, 235, 0.75)"; // Blau
+            } else {
+                statusBox.innerText = "Aktuelle Form: Quader (3D)";
+                statusBox.className = "status-quader";
+            }
+
+            // die 8 Eckpunkte berechnen
+            const x = a / 2, y = b / 2, z = c / 2;
+            const vertices = [
+                project(-x, -y, -z), project(x, -y, -z), project(x, y, -z), project(-x, y, -z),
+                project(-x, -y, z),  project(x, -y, z),  project(x, y, z),  project(-x, y, z)
+            ];
+
+            // 6 Flächen präzise mit ihren Eckpunkt-Indizes definieren
+                        // 6 Flächen präzise mit ihren Eckpunkt-Indizes definieren
+            const faces = [
+                { indices: [0, 1, 2, 3], avgZ: (vertices[0].z + vertices[1].z + vertices[2].z + vertices[3].z) / 4 }, // Hinten
+                { indices: [4, 5, 6, 7], avgZ: (vertices[4].z + vertices[5].z + vertices[6].z + vertices[7].z) / 4 }, // Vorne
+                { indices: [0, 1, 5, 4], avgZ: (vertices[0].z + vertices[1].z + vertices[5].z + vertices[4].z) / 4 }, // Oben
+                { indices: [2, 3, 7, 6], avgZ: (vertices[2].z + vertices[3].z + vertices[7].z + vertices[6].z) / 4 }, // Unten
+                { indices: [0, 3, 7, 4], avgZ: (vertices[0].z + vertices[3].z + vertices[7].z + vertices[4].z) / 4 }, // Links
+                { indices: [1, 2, 6, 5], avgZ: (vertices[1].z + vertices[2].z + vertices[6].z + vertices[5].z) / 4 }  // Rechts
+            ];
+
+
+            // Nach Tiefe sortieren (Painter's Algorithm)
+            faces.sort((f1, f2) => f2.avgZ - f1.avgZ);
+
+            // Flächen zeichnen
+            faces.forEach(face => {
+                ctx.beginPath();
+                ctx.moveTo(vertices[face.indices[0]].x, vertices[face.indices[0]].y);
+                for (let i = 1; i < 4; i++) {
+                    ctx.lineTo(vertices[face.indices[i]].x, vertices[face.indices[i]].y);
+                }
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+        }
+
+
+        function renderZylinder() {
+            const r = parseFloat(document.getElementById('radius-zyl').value);
+            const h = parseFloat(document.getElementById('height-zyl').value);
+
+            document.getElementById('val-r-zyl').innerText = r.toFixed(2);
+            document.getElementById('val-h-zyl').innerText = h.toFixed(2);
+
+            const epsilon = 0.08;
+            const istFlach = (h <= epsilon);
+
+            let color = "rgba(124, 58, 237, 0.75)"; // Lila (Zylinder)
+            if (istFlach) {
+                statusBox.innerText = "Aktuelle Form: Kreis (2D)";
+                statusBox.className = "status-kreis";
+                color = "rgba(5, 150, 105, 0.75)"; // Grün
+            } else {
+                statusBox.innerText = "Aktuelle Form: Zylinder (3D)";
+                statusBox.className = "status-zylinder";
+            }
+
+            const segments = 32;
+            const topPoints = [];
+            const bottomPoints = [];
+
+            for (let i = 0; i < segments; i++) {
+                let angle = (i / segments) * Math.PI * 2;
+                let px = Math.cos(angle) * r;
+                let pz = Math.sin(angle) * r;
+
+                topPoints.push(project(px, -h/2, pz));
+                bottomPoints.push(project(px, h/2, pz));
+            }
+
+            // Mantelflächen-Segmente vorbereiten
+            const wallSegments = [];
+            for (let i = 0; i < segments; i++) {
+                let next = (i + 1) % segments;
+                let avgZ = (topPoints[i].z + topPoints[next].z + bottomPoints[i].z + bottomPoints[next].z) / 4;
+                wallSegments.push({ i, next, avgZ });
+            }
+            // Nach Tiefe sortieren
+            wallSegments.sort((s1, s2) => s2.avgZ - s1.avgZ);
+
+            // 1. Wenn nicht flach, die Wand zeichnen
+            wallSegments.forEach(seg => {
+                ctx.beginPath();
+                ctx.moveTo(topPoints[seg.i].x, topPoints[seg.i].y);
+                ctx.lineTo(topPoints[seg.next].x, topPoints[seg.next].y);
+                ctx.lineTo(bottomPoints[seg.next].x, bottomPoints[seg.next].y);
+                ctx.lineTo(bottomPoints[seg.i].x, bottomPoints[seg.i].y);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.stroke();
+            });
+
+            // 2. Deckel oben zeichnen
+            ctx.beginPath();
+            ctx.moveTo(topPoints[0].x, topPoints[0].y);
+            for(let i=1; i<segments; i++) ctx.lineTo(topPoints[i].x, topPoints[i].y);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 3. Boden unten zeichnen (nur sichtbar, wenn nicht flach)
+            if(!istFlach) {
+                ctx.beginPath();
+                ctx.moveTo(bottomPoints[0].x, bottomPoints[0].y);
+                for(let i=1; i<segments; i++) ctx.lineTo(bottomPoints[i].x, bottomPoints[i].y);
+                ctx.closePath();
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+            }
+        }
+
+        function renderKugel() {
+            const r = parseFloat(document.getElementById('radius-kug').value);
+            document.getElementById('val-r-kug').innerText = r.toFixed(2);
+
+            statusBox.innerText = "Aktuelle Form: Kugel (3D)";
+            statusBox.className = "status-kugel";
+
+            const rings = 16;
+            const segments = 24;
+            const points = [];
+
+            // Punkte berechnen
+            for (let lat = 0; lat <= rings; lat++) {
+                let theta = (lat / rings) * Math.PI;
+                let sinTheta = Math.sin(theta);
+                let cosTheta = Math.cos(theta);
+
+                for (let lon = 0; lon <= segments; lon++) {
+                    let phi = (lon / segments) * Math.PI * 2;
+                    let x = Math.cos(phi) * sinTheta * r;
+                    let y = cosTheta * r;
+                    let z = Math.sin(phi) * sinTheta * r;
+
+                    points.push(project(x, y, z));
+                }
+            }
+
+            // Quad-Flächen erstellen
+            const faces = [];
+            for (let lat = 0; lat < rings; lat++) {
+                for (let lon = 0; lon < segments; lon++) {
+                    let first = (lat * (segments + 1)) + lon;
+                    let second = first + segments + 1;
+
+                    let p1 = points[first];
+                    let p2 = points[first + 1];
+                    let p3 = points[second + 1];
+                    let p4 = points[second];
+
+                    let avgZ = (p1.z + p2.z + p3.z + p4.z) / 4;
+                    faces.push({ indices: [first, first + 1, second + 1, second], avgZ });
+                }
+            }
+
+            // Sortieren nach Tiefe
+            faces.sort((f1, f2) => f2.avgZ - f1.avgZ);
+
+            // Gitter/Flächen zeichnen
+            faces.forEach(face => {
+                ctx.beginPath();
+                ctx.moveTo(points[face.indices[0]].x, points[face.indices[0]].y);
+                ctx.lineTo(points[face.indices[1]].x, points[face.indices[1]].y);
+                ctx.lineTo(points[face.indices[2]].x, points[face.indices[2]].y);
+                ctx.lineTo(points[face.indices[3]].x, points[face.indices[3]].y);
+                ctx.closePath();
+                
+                // Schattierung basierend auf der Tiefe für echten 3D-Effekt
+                let brightness = Math.floor(100 + (face.avgZ * 30)); 
+                ctx.fillStyle = `rgba(${brightness}, 39, 119, 0.75)`;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.stroke();
+            });
+        }
+
+        // Starten
+        draw();
+    </script>
+</body>
+</html>
+
